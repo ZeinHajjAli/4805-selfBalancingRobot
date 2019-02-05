@@ -1,18 +1,18 @@
 ![img](/pics/header.jpg)
 
----
+
 
 ### SYSC 4805 - Computer Systems Design Lab
 
----
+
 
 # **Project Proposal**
 
----
+
 
 ## Group #9
 
----
+
 
 ## Students:
 
@@ -26,13 +26,13 @@ Hussain Aljabri	100935515
 
 Ahmad Ayyoub	100954214
 
----
+
 
 ## Objectives
 
 The goal of the computer systems design lab as part of the SYSC 4805 project is to design and implement a robotic platform. The system will contain various sensors and the associated software that processes sensor data and drives the robot to solve a task. The task that our robot will accomplish is self-balancing. The robot will use its motors to keep itself upright, without any other aid. If this is achieved, we will also be adding a simple line-following capability. This will be implemented using a real robot platform rather than using the simulation software, Vrep. Reasons as to why the group decided to build a physical robot rather than use the simulation software was that using a physical model of the robot would translate to real world application as well as produce a hands-on and interactive end product.
 
----
+
 
 ## Main Details
 
@@ -117,7 +117,7 @@ Overall, the risk associated with the combination of the events is minimal in th
 
 ## Project Cost and Duration
 
-        The basic equipment that we will use for the robot&#39;s hardware configuration are borrowed from Carleton University, and other sensors hardware equipment might be purchased or borrowed from Graham Eatherley if needed and available. If these sensors are not available locally, we will need to purchase these components, which will come with a cost. However, often times these components are cheap and will not have a huge impact in terms of cost.  As stated in the tentative schedule, the basic equipments will be returned at the end of the semester. It is assumed that the duration of the project will last the whole semester with a functional product developed at the end of the term.
+The basic equipment that we will use for the robot&#39;s hardware configuration are borrowed from Carleton University, and other sensors hardware equipment might be purchased or borrowed from Graham Eatherley if needed and available. If these sensors are not available locally, we will need to purchase these components, which will come with a cost. However, often times these components are cheap and will not have a huge impact in terms of cost.  As stated in the tentative schedule, the basic equipments will be returned at the end of the semester. It is assumed that the duration of the project will last the whole semester with a functional product developed at the end of the term.
 
 ## Hardware or sensor main components
 
