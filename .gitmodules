@@ -1,0 +1,3 @@
+[submodule "gyroLibrary"]
+	path = gyroLibrary
+	url = https://github.com/adafruit/Adafruit_BNO055.git
