@@ -31,7 +31,8 @@ VectorFloat gravity; // [x, y, z] gravity vector
 float ypr[3]; // [yaw, pitch, roll] yaw/pitch/roll container and gravity vector
 
 //PID
-double originalSetpoint = 173;
+double originalSetpoint = 173;    /*-----Hussain------
+				OriginalSetPoint is the angle which we want the robot to stay at*/
 double setpoint = originalSetpoint;
 double movingAngleOffset = 0.1;
 double input, output;
