@@ -37,7 +37,21 @@ double movingAngleOffset = 0.1;
 double input, output;
 
 //TODO2: find values for variables below
-//adjust these values to fit your own design
+/* ------------- Hussain --------------------
+We need to tune PID values manually: ( we could use the autoTuner for PID but may not be accurate )
+1. Make Kp, Ki and Kd equal to zero.
+2. Adjust Kp:
+	- too little Kp will make robot fall over, Because there's not enough correction.
+	- too much Kp will make robot go back and forth wildly.
+	- A good enough Kp will make the robot go slightly back and forth
+  
+3. Once Kp is set, adjust Kd.
+	- A good Kd value will lessen the oscillations until the robot is steady.
+	- Also, the right amount of Kd will keep the robot standing, even if pushed.
+  
+4. Set Ki. The robot will oscillate when turned on, even if Kp and Kd are set but will stabilize in time. 
+	- The correct Ki value will shorten the time it takes for the robot to stabilize.
+---------------------------------------------*/
 double Kp = 50;   
 double Kd = 1.4;
 double Ki = 60;
