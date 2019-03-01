@@ -50,9 +50,9 @@ We need to tune PID values manually: ( we could use the autoTuner for PID but ma
 4. Set Ki. The robot will oscillate when turned on, even if Kp and Kd are set but will stabilize in time. 
 	- The correct Ki value will shorten the time it takes for the robot to stabilize.
 ---------------------------------------------*/
-double Kp = 50;   
-double Kd = 1.4;
-double Ki = 60;
+double Kp = 0;   
+double Kd = 0;
+double Ki = 0;
 PID pid(&input, &output, &setpoint, Kp, Ki, Kd, DIRECT);
 
 double motorSpeedFactorLeft = 0.6;
@@ -149,7 +149,7 @@ void loop()
             ypr[1] = -PI - ypr[1];
         }
     }
-	
+	/* ------------------------------------------------------------------------------------*/
 
 	 input = pitch* 180/M_PI + 180;
 	 
@@ -158,6 +158,6 @@ void loop()
     pid.Compute(); // computes the error difference between input and setPoint, and produce output calculation to minimize the error.
     motorController.move(output, MIN_ABS_SPEED);
 
-	
+/* ------------------------------------------------------*/
 
 }
