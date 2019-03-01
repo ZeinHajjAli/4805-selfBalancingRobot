@@ -151,7 +151,7 @@ void loop()
     }
 	/* ------------------------------------------------------------------------------------*/
 
-	 input = pitch* 180/M_PI + 180;
+	 input = ypr[1]* 180/M_PI + 180;
 	 
 /* ------------------ Balancing Loop--------------------- */
     //no bno data - performing PID calculations and output to motors 
