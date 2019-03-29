@@ -1,11 +1,12 @@
-#include "Adafruit_Sensor.h"
-#include "Adafruit_BNO055.h"
+#include <PID_v1.h>
+#include <Adafruit_Sensor.h>
+#include <Adafruit_BNO055.h>
 #include <Wire.h>
-#include "PID_v1.h"
+
 //TODO1: look into making this custom
 //#include <LMotorController.h>
 #include "I2Cdev.h"
-
+#include <utility/imumaths.h> // from Adafruit_BNO055 Library
 
 #if I2CDEV_IMPLEMENTATION == I2CDEV_ARDUINO_WIRE
 #include "Wire.h"
@@ -15,30 +16,27 @@
 #define MIN_ABS_SPEED 20
 
 Adafruit_BNO055 bno = Adafruit_BNO055(55);
-
-// MPU control/status vars
-bool dmpReady = false; // set true if DMP init was successful
-//TODO3: set up interrupt from bno
-uint8_t bnoIntStatus; // holds actual interrupt status byte from bno
-uint8_t devStatus; // return status after each device operation (0 = success, !0 = error)
+/*
+uint8_t devStatus; // return status after each device operation (0 = success, !0 = error) (Used just after dmp Initialization)
 uint16_t packetSize; // expected DMP packet size (default is 42 bytes)
 uint16_t fifoCount; // count of all bytes currently in FIFO
 uint8_t fifoBuffer[64]; // FIFO storage buffer
+*/
 
 // orientation/motion vars
-Quaternion q; // [w, x, y, z] quaternion container
-VectorFloat gravity; // [x, y, z] gravity vector
+imu::Quaternion q; // [w, x, y, z] quaternion container
+imu::Vector<3> gravity; // [x, y, z] gravity vector
 float ypr[3]; // [yaw, pitch, roll] yaw/pitch/roll container and gravity vector
 
 //PID
-double originalSetpoint = 173;    /*-----Hussain------
+double originalSetpoint = 0;    /*-----------
 				OriginalSetPoint is the angle which we want the robot to stay at*/
 double setpoint = originalSetpoint;
 double movingAngleOffset = 0.1;
 double input, output;
 
 //TODO2: find values for variables below
-/* ------------- Hussain --------------------
+/* ------------------------------------------
 We need to tune PID values manually: ( we could use the autoTuner for PID but may not be accurate )
 1. Make Kp, Ki and Kd equal to zero.
 2. Adjust Kp:
@@ -53,34 +51,23 @@ We need to tune PID values manually: ( we could use the autoTuner for PID but ma
 4. Set Ki. The robot will oscillate when turned on, even if Kp and Kd are set but will stabilize in time. 
 	- The correct Ki value will shorten the time it takes for the robot to stabilize.
 ---------------------------------------------*/
-double Kp = 50;   
-double Kd = 1.4;
-double Ki = 60;
+double Kp = 0.00000001;   
+double Kd = 1;
+double Ki = 1;
 PID pid(&input, &output, &setpoint, Kp, Ki, Kd, DIRECT);
 
 double motorSpeedFactorLeft = 0.6;
 double motorSpeedFactorRight = 0.5;
-//end of custom values
 
 
-/*
-//MOTOR CONTROLLER
-int ENA = 5;
-int IN1 = 6;
-int IN2 = 7;
-int IN3 = 8;
-int IN4 = 9;
-int ENB = 10;
-LMotorController motorController(ENA, IN1, IN2, ENB, IN3, IN4, motorSpeedFactorLeft, motorSpeedFactorRight);
-*/
 
-volatile bool bnoInterrupt = false; // indicates whether bno interrupt pin has gone high
+#define MOTORA_PINA 11
+#define MOTORA_PINB 12
+#define MOTORB_PINA 9
+#define MOTORB_PINB 10
 
-void dmpDataReady()
-{
-  bnoInterrupt = true;
-}
 
+byte byteSpeed;
 
 void setup()
 {
@@ -92,7 +79,28 @@ void setup()
   Fastwire::setup(400, true);
   #endif
 
-//TODO4: research bno intialization
+  
+  /*
+		BNO intialization
+  */
+	Serial.begin(9600);
+	Serial.println("Orientation Sensor Test"); Serial.println("");
+	/* Initialise the sensor */
+	if(!bno.begin())
+	{
+	/* There was a problem detecting the BNO055 ... check your connections */
+		Serial.print("Ooops, no BNO055 detected ... Check your wiring or I2C ADDR!");
+		while(1);
+	}
+	delay(1000);
+	bno.setExtCrystalUse(true);
+  
+  /*   PID setup   */
+    pid.SetMode(AUTOMATIC);
+    pid.SetSampleTime(10);
+    pid.SetOutputLimits(0, 255); 
+  
+//TODO4: research bno intialization       // The bno should be placed in 0 offset.
 /*
   //Initialize bno
   mpu.initialize();
@@ -105,41 +113,6 @@ void setup()
   mpu.setZGyroOffset(-85);
   mpu.setZAccelOffset(1788); // 1688 factory default for my test chip
 
-*/
-
-//TODO5: find bno replacment for DMP
-/*
-  // make sure it worked (returns 0 if so)
-  if (devStatus == 0)
-  {
-    // turn on the DMP, now that it's ready
-    mpu.setDMPEnabled(true);
-    
-    // enable Arduino interrupt detection
-    attachInterrupt(0, dmpDataReady, RISING);
-    mpuIntStatus = mpu.getIntStatus();
-    
-    // set our DMP Ready flag so the main loop() function knows it's okay to use it
-    dmpReady = true;
-    
-    // get expected DMP packet size for later comparison
-    packetSize = mpu.dmpGetFIFOPacketSize();
-    
-    //setup PID
-    pid.SetMode(AUTOMATIC);
-    pid.SetSampleTime(10);
-    pid.SetOutputLimits(-255, 255); 
-  }
-  else
-  {
-    // ERROR!
-    // 1 = initial memory load failed
-    // 2 = DMP configuration updates failed
-    // (if it's going to break, usually the code will be 1)
-    Serial.print(F("DMP Initialization failed (code "));
-    Serial.print(devStatus);
-    Serial.println(F(")"));
-  }
  */
 }
 
@@ -147,57 +120,105 @@ void setup()
 void loop()
 {
   // if programming failed, don't try to do anything
-  if (!dmpReady) return;
-  
-  // wait for bno interrupt or extra packet(s) available
-  while (!bnoInterrupt && fifoCount < packetSize)
-  {
+
+	 q = bno.getQuat(); // Request quaternion data from BNO055
+   gravity = bno.getVector(Adafruit_BNO055::VECTOR_GRAVITY);// Request Gravity vector from BNO055
+//   Serial.print("q = w: ");
+//   Serial.print(q.w());
+//   Serial.print(" x: ");
+//   Serial.print(q.x());
+//   Serial.print(" y: ");
+//   Serial.print(q.y());
+//   Serial.print(" z: ");
+//   Serial.print(q.z());
+//   Serial.println();
+
+//   Serial.print("g = x: ");
+//   Serial.print(gravity[0]);
+//   Serial.print(" y: ");
+//   Serial.print(gravity[1]);
+//   Serial.print(" z: ");
+//   Serial.print(gravity[2]);
+//   Serial.println();
+
+	 /* --------------------------------------------------------------------------------
+							
+							Calculating the YAW PITCH ROLL
+	
+	 -----------------------------------------------------------------------------------*/
+	     // yaw: (about Z axis)
+    ypr[0] = atan2(2*q.x()*q.y() - 2*q.w() *q.z(), 2*q.w() *q.w() + 2*q.x()*q.x() - 1);
+    // pitch: (nose up/down, about Y axis)
+    ypr[1] = atan2(gravity[0] , sqrt(gravity[1]*gravity[1] + gravity[2]*gravity[2]));
+    // roll: (tilt left/right, about X axis)
+    ypr[2] = atan2(gravity[1] , gravity[2]);
+
+//    Serial.print("ypr = yaw: ");
+//    Serial.print(ypr[0]);
+//    Serial.print(" pitch: ");
+//    Serial.print(ypr[1]);
+//    Serial.print(" roll: ");
+//    Serial.print(ypr[2]);
+//    Serial.println();
+    
+    if(gravity[2]<0) {
+        if(ypr[1]>0) {
+            ypr[1] = PI - ypr[1]; 
+        } else { 
+            ypr[1] = -PI - ypr[1];
+        }
+    }
+	/* ------------------------------------------------------------------------------------*/
+
+	 input = ypr[1]* 180/M_PI + 180;
+   
+//   Serial.print("input to PID: ");
+//   Serial.print(input);
+//   Serial.println();
+	 
+/* ------------------ Balancing Loop--------------------- */
     //no bno data - performing PID calculations and output to motors 
-    pid.Compute();
-    motorController.move(output, MIN_ABS_SPEED);
-  
-  }
-  
-  // reset interrupt flag and get INT_STATUS byte
-  bnoInterrupt = false;
-  bnoIntStatus = mpu.getIntStatus();
-  
-  // get current FIFO count
-  fifoCount = mpu.getFIFOCount();
-  
-  // check for overflow (this should never happen unless our code is too inefficient)
-  if ((bnoIntStatus & 0x10) || fifoCount == 1024)
-  {
-    //TODO6: find alternative to mpu.resetFIFO();
-    /*
-    // reset so we can continue cleanly
-    mpu.resetFIFO();
-    Serial.println(F("FIFO overflow!"));
-    */
-    
-    // otherwise, check for DMP data ready interrupt (this should happen frequently)
-  }
-  else if (bnoIntStatus & 0x02)
-  {
-    // wait for correct available data length, should be a VERY short wait
-    while (fifoCount < packetSize) fifoCount = mpu.getFIFOCount();
+    pid.Compute();// computes the error difference between input and setPoint, and produce output calculation to minimize the error.
+    //output = -output;
+    Serial.print("output: ");
+    Serial.print(output);
+    Serial.println();
+    if(output<-200){
+      move(0, MIN_ABS_SPEED);
+    }else{
+      move(output, MIN_ABS_SPEED);     
+    }
 
-    //TODO6
-    /*
-    // read a packet from FIFO
-    mpu.getFIFOBytes(fifoBuffer, packetSize);
-    */
-    
-    // track FIFO count here in case there is > 1 packet available
-    // (this lets us immediately read more without waiting for an interrupt)
-    fifoCount -= packetSize;
 
-    //TODO7: find functions for bno
-    /*
-    mpu.dmpGetQuaternion(&q, fifoBuffer);
-    mpu.dmpGetGravity(&gravity, &q);
-    mpu.dmpGetYawPitchRoll(ypr, &q, &gravity);
-    input = ypr[1] * 180/M_PI + 180;
-    */
+/* ------------------------------------------------------*/
+
+}
+
+void move(int Speed, int MIN)
+{
+  if (Speed < 0){
+    Speed = -Speed;
+    backward(Speed, MIN);
+  } else {
+    forward(Speed, MIN);
   }
+}
+
+void forward(int Speed, int MIN)
+{
+  //byteSpeed = map(Speed, 0, 100, 0, 255);
+  analogWrite(MOTORB_PINA, Speed);
+  analogWrite(MOTORB_PINB, 0);
+  analogWrite(MOTORA_PINA, 0);
+  analogWrite(MOTORA_PINB, Speed);
+}
+
+void backward(int Speed, int MIN)
+{
+  
+  //byteSpeed = map(Speed, 0, 100, 0, 255);
+  analogWrite(MOTORB_PINB, Speed);
+  analogWrite(MOTORB_PINA, 0);
+  analogWrite(MOTORA_PINB, 0);
+  analogWrite(MOTORA_PINA, Speed);
 }
