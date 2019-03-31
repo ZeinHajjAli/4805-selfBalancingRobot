@@ -32,7 +32,7 @@ float ypr[3]; // [yaw, pitch, roll] yaw/pitch/roll container and gravity vector
 double originalSetpoint = 0;    /*-----------
 				OriginalSetPoint is the angle which we want the robot to stay at*/
 double setpoint = originalSetpoint;
-double movingAngleOffset = 0.1;
+double movingAngleOffset = 0;
 double input, output;
 
 //TODO2: find values for variables below
@@ -51,9 +51,9 @@ We need to tune PID values manually: ( we could use the autoTuner for PID but ma
 4. Set Ki. The robot will oscillate when turned on, even if Kp and Kd are set but will stabilize in time. 
 	- The correct Ki value will shorten the time it takes for the robot to stabilize.
 ---------------------------------------------*/
-double Kp = 0.00000001;   
-double Kd = 1;
-double Ki = 1;
+double Kp = 65;  // 65  
+double Kd = 2;
+double Ki = 2;
 PID pid(&input, &output, &setpoint, Kp, Ki, Kd, DIRECT);
 
 double motorSpeedFactorLeft = 0.6;
@@ -68,6 +68,8 @@ double motorSpeedFactorRight = 0.5;
 
 
 byte byteSpeed;
+double angle;
+#define threshold 0.09
 
 void setup()
 {
@@ -98,7 +100,7 @@ void setup()
   /*   PID setup   */
     pid.SetMode(AUTOMATIC);
     pid.SetSampleTime(10);
-    pid.SetOutputLimits(0, 255); 
+    pid.SetOutputLimits(-255, 255); 
   
 //TODO4: research bno intialization       // The bno should be placed in 0 offset.
 /*
@@ -155,11 +157,11 @@ void loop()
 
 //    Serial.print("ypr = yaw: ");
 //    Serial.print(ypr[0]);
-//    Serial.print(" pitch: ");
-//    Serial.print(ypr[1]);
+    Serial.print(" pitch: ");
+    Serial.print(ypr[1]);
 //    Serial.print(" roll: ");
 //    Serial.print(ypr[2]);
-//    Serial.println();
+    Serial.println();
     
     if(gravity[2]<0) {
         if(ypr[1]>0) {
@@ -180,13 +182,18 @@ void loop()
     //no bno data - performing PID calculations and output to motors 
     pid.Compute();// computes the error difference between input and setPoint, and produce output calculation to minimize the error.
     //output = -output;
-    Serial.print("output: ");
-    Serial.print(output);
-    Serial.println();
-    if(output<-200){
+//    Serial.print("output: ");
+//    Serial.print(output);
+//    Serial.println();
+    angle = ypr[1]-movingAngleOffset;
+    if(angle<threshold && angle>-threshold){
       move(0, MIN_ABS_SPEED);
-    }else{
-      move(output, MIN_ABS_SPEED);     
+    } else {
+      if(angle<0){
+        move(-output, MIN_ABS_SPEED);
+      }else{
+        move(output, MIN_ABS_SPEED);     
+      }
     }
 
 
