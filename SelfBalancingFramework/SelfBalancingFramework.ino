@@ -51,7 +51,7 @@ We need to tune PID values manually: ( we could use the autoTuner for PID but ma
 4. Set Ki. The robot will oscillate when turned on, even if Kp and Kd are set but will stabilize in time. 
 	- The correct Ki value will shorten the time it takes for the robot to stabilize.
 ---------------------------------------------*/
-double Kp = 65;  // 65  
+double Kp = 45;  // 65  
 double Kd = 2;
 double Ki = 2;
 PID pid(&input, &output, &setpoint, Kp, Ki, Kd, DIRECT);
@@ -62,18 +62,18 @@ double motorSpeedFactorRight = 0.5;
 
 
 #define MOTORA_PINA 11
-#define MOTORA_PINB 12
+#define MOTORA_PINB 5
 #define MOTORB_PINA 9
 #define MOTORB_PINB 10
 
 
 byte byteSpeed;
 double angle;
-#define threshold 0.09
+#define threshold 0.01
 
 void setup()
 {
-  // join I2C bus (I2Cdev library doesn't do this automatically)
+  // join I2C bus 000000000000(I2Cdev library doesn't do this automatically)
   #if I2CDEV_IMPLEMENTATION == I2CDEV_ARDUINO_WIRE
   Wire.begin();
   TWBR = 24; // 400kHz I2C clock (200kHz if CPU is 8MHz)
