@@ -13,7 +13,7 @@
 #endif
 
 //TODO2: Change value
-#define MIN_ABS_SPEED 20
+#define MIN_ABS_SPEED 128
 
 Adafruit_BNO055 bno = Adafruit_BNO055(55);
 /*
@@ -29,7 +29,7 @@ imu::Vector<3> gravity; // [x, y, z] gravity vector
 float ypr[3]; // [yaw, pitch, roll] yaw/pitch/roll container and gravity vector
 
 //PID
-double originalSetpoint = 0;    /*-----------
+double originalSetpoint = 180;    /*-----------
 				OriginalSetPoint is the angle which we want the robot to stay at*/
 double setpoint = originalSetpoint;
 double movingAngleOffset = 0;
@@ -43,6 +43,7 @@ We need to tune PID values manually: ( we could use the autoTuner for PID but ma
 	- too little Kp will make robot fall over, Because there's not enough correction.
 	- too much Kp will make robot go back and forth wildly.
 	- A good enough Kp will make the robot go slightly back and forth
+
   
 3. Once Kp is set, adjust Kd.
 	- A good Kd value will lessen the oscillations until the robot is steady.
@@ -51,12 +52,12 @@ We need to tune PID values manually: ( we could use the autoTuner for PID but ma
 4. Set Ki. The robot will oscillate when turned on, even if Kp and Kd are set but will stabilize in time. 
 	- The correct Ki value will shorten the time it takes for the robot to stabilize.
 ---------------------------------------------*/
-double Kp = 45;  // 65  
-double Kd = 2;
-double Ki = 2;
+double Kp = 58;  // 58 
+double Kd = 2; // 2.5
+double Ki = 60; // 
 PID pid(&input, &output, &setpoint, Kp, Ki, Kd, DIRECT);
 
-double motorSpeedFactorLeft = 0.6;
+double motorSpeedFactor =1 ;
 double motorSpeedFactorRight = 0.5;
 
 
@@ -69,8 +70,8 @@ double motorSpeedFactorRight = 0.5;
 
 byte byteSpeed;
 double angle;
-#define threshold 0.01
-
+#define threshold 0
+bool firstSample;
 void setup()
 {
   // join I2C bus 000000000000(I2Cdev library doesn't do this automatically)
@@ -116,6 +117,7 @@ void setup()
   mpu.setZAccelOffset(1788); // 1688 factory default for my test chip
 
  */
+ firstSample = true;
 }
 
 
@@ -157,11 +159,11 @@ void loop()
 
 //    Serial.print("ypr = yaw: ");
 //    Serial.print(ypr[0]);
-    Serial.print(" pitch: ");
-    Serial.print(ypr[1]);
+//    Serial.print(" pitch: ");
+//    Serial.print(ypr[1]);
 //    Serial.print(" roll: ");
 //    Serial.print(ypr[2]);
-    Serial.println();
+//    Serial.println();
     
     if(gravity[2]<0) {
         if(ypr[1]>0) {
@@ -170,10 +172,16 @@ void loop()
             ypr[1] = -PI - ypr[1];
         }
     }
-	/* ------------------------------------------------------------------------------------*/
+//
 
+	/* ------------------------------------------------------------------------------------*/
+//
 	 input = ypr[1]* 180/M_PI + 180;
-   
+//    if(firstSample == true){
+//      setpoint = input;
+//      firstSample = false;
+//    }   
+    
 //   Serial.print("input to PID: ");
 //   Serial.print(input);
 //   Serial.println();
@@ -188,13 +196,17 @@ void loop()
     angle = ypr[1]-movingAngleOffset;
     if(angle<threshold && angle>-threshold){
       move(0, MIN_ABS_SPEED);
-    } else {
-      if(angle<0){
-        move(-output, MIN_ABS_SPEED);
-      }else{
-        move(output, MIN_ABS_SPEED);     
-      }
+
+    }else{
+      move(output, MIN_ABS_SPEED);
     }
+//    } else {
+//      if(angle<0){
+//        move(-output, MIN_ABS_SPEED);
+//      }else{
+//        move(output, MIN_ABS_SPEED);     
+//      }
+//    }
 
 
 /* ------------------------------------------------------*/
@@ -203,16 +215,24 @@ void loop()
 
 void move(int Speed, int MIN)
 {
+  Speed = Speed * motorSpeedFactor;
+
   if (Speed < 0){
     Speed = -Speed;
     backward(Speed, MIN);
-  } else {
+  } else if(Speed > 0) {
     forward(Speed, MIN);
+  } else {
+    stopMotor();
   }
 }
 
 void forward(int Speed, int MIN)
 {
+//  if(Speed < MIN){
+//    Speed = MIN;
+//  }
+   
   //byteSpeed = map(Speed, 0, 100, 0, 255);
   analogWrite(MOTORB_PINA, Speed);
   analogWrite(MOTORB_PINB, 0);
@@ -222,10 +242,20 @@ void forward(int Speed, int MIN)
 
 void backward(int Speed, int MIN)
 {
-  
+//    if(Speed < MIN){
+//    Speed = MIN;
+//  }
   //byteSpeed = map(Speed, 0, 100, 0, 255);
   analogWrite(MOTORB_PINB, Speed);
   analogWrite(MOTORB_PINA, 0);
   analogWrite(MOTORA_PINB, 0);
   analogWrite(MOTORA_PINA, Speed);
+}
+
+void stopMotor(void)
+{
+  analogWrite(MOTORB_PINB, 0);
+  analogWrite(MOTORB_PINA, 0);
+  analogWrite(MOTORA_PINB, 0);
+  analogWrite(MOTORA_PINA, 0);
 }
