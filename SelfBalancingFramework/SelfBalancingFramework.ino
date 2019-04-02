@@ -182,17 +182,17 @@ void loop()
 //      firstSample = false;
 //    }   
     
-//   Serial.print("input to PID: ");
-//   Serial.print(input);
-//   Serial.println();
+   Serial.print("input to PID: ");
+   Serial.print(input);
+   Serial.println();
 	 
 /* ------------------ Balancing Loop--------------------- */
     //no bno data - performing PID calculations and output to motors 
     pid.Compute();// computes the error difference between input and setPoint, and produce output calculation to minimize the error.
     //output = -output;
-//    Serial.print("output: ");
-//    Serial.print(output);
-//    Serial.println();
+    Serial.print("output: ");
+    Serial.print(output);
+    Serial.println();
     angle = ypr[1]-movingAngleOffset;
     if(angle<threshold && angle>-threshold){
       move(0, MIN_ABS_SPEED);
