@@ -1,77 +1,108 @@
+// LIBRARY CALLS
+
+// Include libraries from .zip file:
+//----------------------------------
+
 #include <PID_v1.h>
 #include <Adafruit_Sensor.h>
 #include <Adafruit_BNO055.h>
-#include <Wire.h>
 
-//TODO1: look into making this custom
-//#include <LMotorController.h>
+//----------------------------------
+
+#include <Wire.h>
 #include "I2Cdev.h"
-#include <utility/imumaths.h> // from Adafruit_BNO055 Library
+#include <utility/imumaths.h>
 
 #if I2CDEV_IMPLEMENTATION == I2CDEV_ARDUINO_WIRE
 #include "Wire.h"
 #endif
 
-//TODO2: Change value
-#define MIN_ABS_SPEED 128
+// GYROSCOPE VALUES
+//----------------------------------------------------------------------------------
 
+// Create new gyroscope instance
 Adafruit_BNO055 bno = Adafruit_BNO055(55);
-/*
-uint8_t devStatus; // return status after each device operation (0 = success, !0 = error) (Used just after dmp Initialization)
-uint16_t packetSize; // expected DMP packet size (default is 42 bytes)
-uint16_t fifoCount; // count of all bytes currently in FIFO
-uint8_t fifoBuffer[64]; // FIFO storage buffer
-*/
 
-// orientation/motion vars
+// Orientation/motion vars to be read from Gyroscope
 imu::Quaternion q; // [w, x, y, z] quaternion container
 imu::Vector<3> gravity; // [x, y, z] gravity vector
 float ypr[3]; // [yaw, pitch, roll] yaw/pitch/roll container and gravity vector
 
-//PID
-double originalSetpoint = 180;    /*-----------
-				OriginalSetPoint is the angle which we want the robot to stay at*/
-double setpoint = originalSetpoint;
+//----------------------------------------------------------------------------------
+
+// PID VALUES:
+// -------------------------------------------------------------------------------------------------------------------------------
+
+// orignalSetPoint is angle at which we want the robot to balance at; angle of 0 is upside down; angle of 180 is upside up
+double originalSetpoint = 180;
+
+// setPoint variable used in case of sampling for setPoint at the first run of the code
+double setPoint = originalSetpoint;
+
+// movingAngleOffset used in case of slight angle drift of gyroscope
 double movingAngleOffset = 0;
+
+// variables used for input and output of PID
 double input, output;
 
-//TODO2: find values for variables below
-/* ------------------------------------------
-We need to tune PID values manually: ( we could use the autoTuner for PID but may not be accurate )
+/*---------------------------------------------------------------------------------------------------------
+We need to tune PID values manually: 
 1. Make Kp, Ki and Kd equal to zero.
+
 2. Adjust Kp:
 	- too little Kp will make robot fall over, Because there's not enough correction.
 	- too much Kp will make robot go back and forth wildly.
 	- A good enough Kp will make the robot go slightly back and forth
+----------------------------------------------------------------------------------------------------------*/
+double Kp = 58;  // 58 
 
-  
+/*----------------------------------------------------------------------------------------------------------
 3. Once Kp is set, adjust Kd.
 	- A good Kd value will lessen the oscillations until the robot is steady.
 	- Also, the right amount of Kd will keep the robot standing, even if pushed.
-  
+----------------------------------------------------------------------------------------------------------*/
+double Kd = 2.5; // 2.5
+
+/*----------------------------------------------------------------------------------------------------------
 4. Set Ki. The robot will oscillate when turned on, even if Kp and Kd are set but will stabilize in time. 
 	- The correct Ki value will shorten the time it takes for the robot to stabilize.
----------------------------------------------*/
-double Kp = 58;  // 58 
-double Kd = 2; // 2.5
-double Ki = 60; // 
-PID pid(&input, &output, &setpoint, Kp, Ki, Kd, DIRECT);
+----------------------------------------------------------------------------------------------------------*/
+double Ki = 60; // 60
 
-double motorSpeedFactor =1 ;
-double motorSpeedFactorRight = 0.5;
+// PID initialization
+PID pid(&input, &output, &setPoint, Kp, Ki, Kd, DIRECT);
 
+//---------------------------------------------------------------------------------------------------------------------------------
 
+// MOTOR AND MOTOR DRIVER VALUES:
+//-------------------------------------------------------------------------
 
-#define MOTORA_PINA 11
-#define MOTORA_PINB 5
-#define MOTORB_PINA 9
-#define MOTORB_PINB 10
+// Pin definitions for motors; each pin must be a PWM pin on the Arduino
+#define MOTOR_A_PIN_A 11
+#define MOTOR_A_PIN_B 5
+#define MOTOR_B_PIN_A 9
+#define MOTOR_B_PIN_B 10
 
+// Minimum speed at which motors consistently spin
+#define MIN_ABS_SPEED 128
 
-byte byteSpeed;
+//Speed factors to match non-precise motor speeds to each other
+double globalMotorSpeedFactor = 1;
+double motorSpeedFactorLeft = 1 ;
+double motorSpeedFactorRight = 1;
+
+//-------------------------------------------------------------------------
+
+// TESTING AND VERIFICATION VALUES:
+//-----------------------------------------
+
+bool testMode = false;
 double angle;
 #define threshold 0
-bool firstSample;
+bool firstSample =  true;
+
+//-----------------------------------------
+
 void setup()
 {
   // join I2C bus 000000000000(I2Cdev library doesn't do this automatically)
@@ -82,180 +113,212 @@ void setup()
   Fastwire::setup(400, true);
   #endif
 
-  
-  /*
-		BNO intialization
-  */
+  // BNO INITIALIZATION:
+  //----------------------------------------------------------------------------------
+
+  // Serial initialization and printing for testing
 	Serial.begin(9600);
-	Serial.println("Orientation Sensor Test"); Serial.println("");
-	/* Initialise the sensor */
+	Serial.println("Connecting Orientation Sensor"); Serial.println("");
 	if(!bno.begin())
 	{
-	/* There was a problem detecting the BNO055 ... check your connections */
-		Serial.print("Ooops, no BNO055 detected ... Check your wiring or I2C ADDR!");
+	  // BNO not detected, check connection
+	  Serial.print("Ooops, no BNO055 detected ... Check your wiring or I2C ADDR!");
 		while(1);
 	}
 	delay(1000);
 	bno.setExtCrystalUse(true);
-  
-  /*   PID setup   */
-    pid.SetMode(AUTOMATIC);
-    pid.SetSampleTime(10);
-    pid.SetOutputLimits(-255, 255); 
-  
-//TODO4: research bno intialization       // The bno should be placed in 0 offset.
-/*
-  //Initialize bno
-  mpu.initialize();
-  
-  devStatus = mpu.dmpInitialize();
-  
-  // supply your own gyro offsets here, scaled for min sensitivity
-  mpu.setXGyroOffset(220);
-  mpu.setYGyroOffset(76);
-  mpu.setZGyroOffset(-85);
-  mpu.setZAccelOffset(1788); // 1688 factory default for my test chip
 
- */
- firstSample = true;
+  //----------------------------------------------------------------------------------
+  // PID INITIALIZATION:
+  //-------------------------------------------------------------------------------------------
+
+  // AUTOMATIC sets turns the PID on
+  pid.SetMode(AUTOMATIC);
+  // Sets the time period of the PID evaluation in milliseconds
+  pid.SetSampleTime(10);
+  // Sets the range of the PID output to be from -255 to 255 to drive the motors through PWM
+  pid.SetOutputLimits(-255, 255); 
+
+  //--------------------------------------------------------------------------------------------
 }
 
 
 void loop()
 {
-  // if programming failed, don't try to do anything
+  // Loop won't run if BNO could not be initialized
 
-	 q = bno.getQuat(); // Request quaternion data from BNO055
-   gravity = bno.getVector(Adafruit_BNO055::VECTOR_GRAVITY);// Request Gravity vector from BNO055
-//   Serial.print("q = w: ");
-//   Serial.print(q.w());
-//   Serial.print(" x: ");
-//   Serial.print(q.x());
-//   Serial.print(" y: ");
-//   Serial.print(q.y());
-//   Serial.print(" z: ");
-//   Serial.print(q.z());
-//   Serial.println();
+  // Request quaternion data from BNO055
+	q = bno.getQuat();
+  // Request Gravity vector from BNO055
+  gravity = bno.getVector(Adafruit_BNO055::VECTOR_GRAVITY);
 
-//   Serial.print("g = x: ");
-//   Serial.print(gravity[0]);
-//   Serial.print(" y: ");
-//   Serial.print(gravity[1]);
-//   Serial.print(" z: ");
-//   Serial.print(gravity[2]);
-//   Serial.println();
+  // SERIAL PRINT STATEMENTS FOR TESTING:
+  //-----------------------------------------
 
-	 /* --------------------------------------------------------------------------------
-							
-							Calculating the YAW PITCH ROLL
-	
-	 -----------------------------------------------------------------------------------*/
-	     // yaw: (about Z axis)
-    ypr[0] = atan2(2*q.x()*q.y() - 2*q.w() *q.z(), 2*q.w() *q.w() + 2*q.x()*q.x() - 1);
-    // pitch: (nose up/down, about Y axis)
-    ypr[1] = atan2(gravity[0] , sqrt(gravity[1]*gravity[1] + gravity[2]*gravity[2]));
-    // roll: (tilt left/right, about X axis)
-    ypr[2] = atan2(gravity[1] , gravity[2]);
+  if (testMode) {
+    Serial.print("QUATERNION = w: ");
+    Serial.print(q.w());
+    Serial.print(" x: ");
+    Serial.print(q.x());
+    Serial.print(" y: ");
+    Serial.print(q.y());
+    Serial.print(" z: ");
+    Serial.print(q.z());
+    Serial.println();
+  
+    Serial.print("GRAVITY = x: ");
+    Serial.print(gravity[0]);
+    Serial.print(" y: ");
+    Serial.print(gravity[1]);
+    Serial.print(" z: ");
+    Serial.print(gravity[2]);
+    Serial.println();
+  }
 
-//    Serial.print("ypr = yaw: ");
-//    Serial.print(ypr[0]);
-//    Serial.print(" pitch: ");
-//    Serial.print(ypr[1]);
-//    Serial.print(" roll: ");
-//    Serial.print(ypr[2]);
-//    Serial.println();
+  //-----------------------------------------
+
+  // CALCULATING THE YAW, PITCH, AND ROLL:
+  //-----------------------------------------------------------------------------------------
+
+  // yaw: (about Z axis)
+  ypr[0] = atan2(2*q.x()*q.y() - 2*q.w() *q.z(), 2*q.w() *q.w() + 2*q.x()*q.x() - 1);
+  // pitch: (nose up/down, about Y axis)
+  ypr[1] = atan2(gravity[0] , sqrt(gravity[1]*gravity[1] + gravity[2]*gravity[2]));
+  // roll: (tilt left/right, about X axis)
+  ypr[2] = atan2(gravity[1] , gravity[2]);
+
+  // SERIAL PRINT STATEMENTS FOR TESTING:
+  //-----------------------------------------
+
+  if (testMode) {
+    Serial.print("ypr = YAW: ");
+    Serial.print(ypr[0]);
+    Serial.print(" PITCH: ");
+    Serial.print(ypr[1]);
+    Serial.print(" ROLL: ");
+    Serial.print(ypr[2]);
+    Serial.println();
+  }
+
+  //-----------------------------------------
     
-    if(gravity[2]<0) {
-        if(ypr[1]>0) {
-            ypr[1] = PI - ypr[1]; 
-        } else { 
-            ypr[1] = -PI - ypr[1];
-        }
+  if(gravity[2]<0) {
+    if(ypr[1]>0) {
+      ypr[1] = PI - ypr[1]; 
+    } else { 
+      ypr[1] = -PI - ypr[1];
     }
-//
+  }
 
-	/* ------------------------------------------------------------------------------------*/
-//
-	 input = ypr[1]* 180/M_PI + 180;
-//    if(firstSample == true){
-//      setpoint = input;
-//      firstSample = false;
-//    }   
-    
-   Serial.print("input to PID: ");
-   Serial.print(input);
-   Serial.println();
-	 
-/* ------------------ Balancing Loop--------------------- */
-    //no bno data - performing PID calculations and output to motors 
-    pid.Compute();// computes the error difference between input and setPoint, and produce output calculation to minimize the error.
-    //output = -output;
+  //-------------------------------------------------------------------------------------------
+
+  // Calculate input for PID in degrees
+  input = ypr[1]* 180/M_PI + 180;
+
+  // SERIAL PRINT STATEMENTS FOR TESTING:
+  //-----------------------------------------
+
+  if (testMode) {
+    Serial.print("input to PID: ");
+    Serial.print(input);
+    Serial.println();
+  }
+
+  //-----------------------------------------
+
+  // UNUSED SAMPLING CODE TO DETERMINE SETPOINT ON FIRST LOOP:
+  //-----------------------------------------------------------
+
+//if(firstSample == true){
+//  setPoint = input;
+//  firstSample = false;
+//}
+
+  //-----------------------------------------------------------
+
+  // BALANCING LOOP USING PID AND MOTOR MOVEMENT
+  //--------------------------------------------------------------------------------------------------------------------
+  
+  // no bno data - performing PID calculations and output to motors
+  // computes the error difference between input and setPoint, and produce output calculation to minimize the error.
+  pid.Compute();
+
+  // SERIAL PRINT STATEMENTS FOR TESTING:
+  //-----------------------------------------
+  
+  if (testMode) {
     Serial.print("output: ");
     Serial.print(output);
     Serial.println();
-    angle = ypr[1]-movingAngleOffset;
-    if(angle<threshold && angle>-threshold){
-      move(0, MIN_ABS_SPEED);
+  }
 
-    }else{
-      move(output, MIN_ABS_SPEED);
-    }
-//    } else {
-//      if(angle<0){
-//        move(-output, MIN_ABS_SPEED);
-//      }else{
-//        move(output, MIN_ABS_SPEED);     
-//      }
-//    }
+  //-----------------------------------------
 
+  // Move motors  with the speed of the output given by the PID to counteract the system's forces
+  move(output);
 
-/* ------------------------------------------------------*/
+  //--------------------------------------------------------------------------------------------------------------------
 
 }
 
-void move(int Speed, int MIN)
+// Move function for motor driver
+void move(int Speed)
 {
-  Speed = Speed * motorSpeedFactor;
+  // Uses motor factor to scale output if needed; default is 1
+  Speed = Speed * globalMotorSpeedFactor;
 
+  // Output is given between -255 and 255,
+  // If output is negative, take absolute value and reverse drive
   if (Speed < 0){
     Speed = -Speed;
     backward(Speed, MIN);
-  } else if(Speed > 0) {
+  }
+  // Else if output is positive, forward drive
+  else if(Speed > 0) {
     forward(Speed, MIN);
-  } else {
+  }
+  // Else if output is zero, robot is balanced, stop motors 
+  else {
     stopMotor();
   }
 }
 
+// Move forward function for motor driver
 void forward(int Speed, int MIN)
 {
-//  if(Speed < MIN){
-//    Speed = MIN;
-//  }
-   
-  //byteSpeed = map(Speed, 0, 100, 0, 255);
-  analogWrite(MOTORB_PINA, Speed);
-  analogWrite(MOTORB_PINB, 0);
-  analogWrite(MOTORA_PINA, 0);
-  analogWrite(MOTORA_PINB, Speed);
+  // If speed is less than minimum speed, the motors will not move; so set speed to minimum speed
+  if(Speed < MIN){
+    Speed = MIN;
+  }
+  // Run motor A at speed
+  analogWrite(MOTOR_A_PIN_A, 0);
+  analogWrite(MOTOR_A_PIN_B, Speed);
+  // Run motor B at speed
+  analogWrite(MOTOR_B_PIN_A, Speed);
+  analogWrite(MOTOR_B_PIN_B, 0);
 }
 
+// Move forward function for motor driver
 void backward(int Speed, int MIN)
 {
-//    if(Speed < MIN){
-//    Speed = MIN;
-//  }
-  //byteSpeed = map(Speed, 0, 100, 0, 255);
-  analogWrite(MOTORB_PINB, Speed);
-  analogWrite(MOTORB_PINA, 0);
-  analogWrite(MOTORA_PINB, 0);
-  analogWrite(MOTORA_PINA, Speed);
+  // If speed is less than minimum speed, the motors will not move; so set speed to minimum speed
+  if(Speed < MIN){
+    Speed = MIN;
+  }
+  // Run motor A at speed
+  analogWrite(MOTOR_A_PIN_B, 0);
+  analogWrite(MOTOR_A_PIN_A, Speed);
+  // Run motor B at speed
+  analogWrite(MOTOR_B_PIN_B, Speed);
+  analogWrite(MOTOR_B_PIN_A, 0);
 }
 
+// Stop function for motor driver
 void stopMotor(void)
 {
-  analogWrite(MOTORB_PINB, 0);
-  analogWrite(MOTORB_PINA, 0);
-  analogWrite(MOTORA_PINB, 0);
-  analogWrite(MOTORA_PINA, 0);
+  // Set all motor pins to zero to stop all motors
+  analogWrite(MOTOR_B_PIN_B, 0);
+  analogWrite(MOTOR_B_PIN_A, 0);
+  analogWrite(MOTOR_A_PIN_B, 0);
+  analogWrite(MOTOR_A_PIN_A, 0);
 }
