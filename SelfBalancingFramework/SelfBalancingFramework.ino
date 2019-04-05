@@ -271,11 +271,11 @@ void move(int Speed)
   // If output is negative, take absolute value and reverse drive
   if (Speed < 0){
     Speed = -Speed;
-    backward(Speed, MIN);
+    backward(Speed);
   }
   // Else if output is positive, forward drive
   else if(Speed > 0) {
-    forward(Speed, MIN);
+    forward(Speed);
   }
   // Else if output is zero, robot is balanced, stop motors 
   else {
@@ -284,11 +284,11 @@ void move(int Speed)
 }
 
 // Move forward function for motor driver
-void forward(int Speed, int MIN)
+void forward(int Speed)
 {
   // If speed is less than minimum speed, the motors will not move; so set speed to minimum speed
-  if(Speed < MIN){
-    Speed = MIN;
+  if(Speed < MIN_ABS_SPEED){
+    Speed = MIN_ABS_SPEED;
   }
   // Run motor A at speed
   analogWrite(MOTOR_A_PIN_A, 0);
@@ -299,11 +299,11 @@ void forward(int Speed, int MIN)
 }
 
 // Move forward function for motor driver
-void backward(int Speed, int MIN)
+void backward(int Speed)
 {
   // If speed is less than minimum speed, the motors will not move; so set speed to minimum speed
-  if(Speed < MIN){
-    Speed = MIN;
+  if(Speed < MIN_ABS_SPEED){
+    Speed = MIN_ABS_SPEED;
   }
   // Run motor A at speed
   analogWrite(MOTOR_A_PIN_B, 0);
